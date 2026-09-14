@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { ChevronLeft, ChevronRight, Download, Settings, Calendar } from 'lucide-react'
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO, getWeek, getYear } from 'date-fns'
+import { ChevronLeft, ChevronRight, Download, Settings, DollarSign, Clock } from 'lucide-react'
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO, getWeek, isToday, isYesterday } from 'date-fns'
 import { secondsToHours } from '@/lib/utils'
 import type { Project, Client, Profile, TimeEntry } from '@/lib/types'
 
@@ -17,6 +17,15 @@ interface Props {
 }
 
 type ViewMode = 'summary' | 'detailed' | 'calendar'
+
+function MemberAvatar({ name }: { name: string }) {
+  const initials = (name || '?').split(' ').map((n: string) => n[0] || '').join('').toUpperCase().slice(0, 2)
+  return (
+    <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--purple)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: 'white', flexShrink: 0 }}>
+      {initials}
+    </div>
+  )
+}
 
 export default function ReportsClient({ orgId, isAdmin, currentUserId, projects, clients, members }: Props) {
   const [mounted, setMounted] = useState(false)
@@ -85,19 +94,53 @@ export default function ReportsClient({ orgId, isAdmin, currentUserId, projects,
   const noProjectEntries = entries.filter(e => !e.project_id)
   const noProjectSecs = noProjectEntries.reduce((s, e) => s + (e.duration || 0), 0)
 
+  // Member breakdown for detailed view
+  const memberMap = Object.fromEntries(members.map(m => [m.user_id, m]))
+
+  // Group entries by date for detailed view
+  const entriesByDate = entries.reduce((acc, e) => {
+    const date = format(parseISO(e.start_time), 'yyyy-MM-dd')
+    if (!acc[date]) acc[date] = []
+    acc[date].push(e)
+    return acc
+  }, {} as Record<string, TimeEntry[]>)
+
+  const sortedDates = Object.keys(entriesByDate).sort((a, b) => b.localeCompare(a))
+
+  function dateGroupLabel(dateStr: string) {
+    const d = parseISO(dateStr)
+    if (isToday(d)) return `Today — ${format(d, 'EEEE, d MMM')}`
+    if (isYesterday(d)) return `Yesterday — ${format(d, 'EEEE, d MMM')}`
+    return format(d, 'EEEE, d MMM')
+  }
+
+  const StatCards = () => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.25rem' }}>
+      {[
+        { label: 'Total hours', value: secondsToHours(totalSecs) },
+        { label: `Billable hours (${billablePct}%)`, value: secondsToHours(billableSecs) },
+        { label: 'Avg daily hours', value: secondsToHours(Math.round(totalSecs / 7)) },
+      ].map(s => (
+        <div key={s.label} className="card" style={{ padding: '1rem' }}>
+          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>{s.value}</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{s.label}</div>
+        </div>
+      ))}
+    </div>
+  )
+
   const CalendarView = () => {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     return (
       <div>
-        {/* Day headers */}
         <div style={{ display: 'grid', gridTemplateColumns: '60px repeat(7, 1fr)', gap: '1px', marginBottom: '1px' }}>
           <div />
           {days.map((d, i) => {
             const date = new Date(weekStart)
             date.setDate(weekStart.getDate() + i)
-            const isToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
+            const todayFlag = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
             return (
-              <div key={d} style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.8rem', color: isToday ? 'var(--purple-pale)' : 'var(--text-muted)', fontWeight: isToday ? 700 : 400 }}>
+              <div key={d} style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.8rem', color: todayFlag ? 'var(--purple-pale)' : 'var(--text-muted)', fontWeight: todayFlag ? 700 : 400 }}>
                 <div>{d}</div>
                 <div style={{ fontSize: '1rem', fontWeight: 700 }}>{format(date, 'd')}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -111,7 +154,6 @@ export default function ReportsClient({ orgId, isAdmin, currentUserId, projects,
             )
           })}
         </div>
-        {/* Hours grid */}
         <div className="card" style={{ overflow: 'hidden' }}>
           {Array.from({ length: 14 }, (_, h) => h + 7).map(hour => (
             <div key={hour} style={{ display: 'grid', gridTemplateColumns: '60px repeat(7, 1fr)', gap: '1px', borderBottom: '1px solid var(--border-color)', minHeight: '48px', alignItems: 'start' }}>
@@ -175,7 +217,7 @@ export default function ReportsClient({ orgId, isAdmin, currentUserId, projects,
             <ChevronLeft size={16} />
           </button>
           <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', padding: '0 0.5rem' }}>
-            This week · W{weekNum}
+            W{weekNum} · {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}
           </span>
           <button onClick={() => setWeekDate(addWeeks(weekDate, 1))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0.25rem', display: 'flex', borderRadius: '4px' }}>
             <ChevronRight size={16} />
@@ -209,22 +251,118 @@ export default function ReportsClient({ orgId, isAdmin, currentUserId, projects,
         </div>
       ) : view === 'calendar' ? (
         <CalendarView />
+
+      ) : view === 'detailed' ? (
+        /* ── DETAILED VIEW ── */
+        <div>
+          <StatCards />
+
+          {entries.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
+              <Clock size={36} style={{ margin: '0 auto 0.75rem', opacity: 0.3 }} />
+              <p>No time entries for this period.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {sortedDates.map(dateStr => {
+                const dayEntries = entriesByDate[dateStr]
+                const daySecs = dayEntries.reduce((s, e) => s + (e.duration || 0), 0)
+                return (
+                  <div key={dateStr}>
+                    {/* Date group header */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', padding: '0 0.25rem' }}>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                        {dateGroupLabel(dateStr)}
+                      </span>
+                      <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                        {secondsToHours(daySecs)}
+                      </span>
+                    </div>
+
+                    {/* Entries table */}
+                    <div className="card" style={{ overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            {isAdmin && (
+                              <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Member</th>
+                            )}
+                            <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Description</th>
+                            <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Project</th>
+                            <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Time</th>
+                            <th style={{ padding: '0.6rem 1rem', textAlign: 'right', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Duration</th>
+                            <th style={{ padding: '0.6rem 1rem', textAlign: 'center', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Bill.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dayEntries.map((entry, idx) => {
+                            const member = memberMap[entry.user_id]
+                            const memberName = member?.full_name || entry.profile?.full_name || 'Unknown'
+                            const startStr = entry.start_time ? format(parseISO(entry.start_time), 'HH:mm') : '—'
+                            const endStr = entry.end_time ? format(parseISO(entry.end_time), 'HH:mm') : '—'
+                            const dur = entry.duration ? secondsToHours(entry.duration) : '—'
+                            const isLast = idx === dayEntries.length - 1
+                            return (
+                              <tr key={entry.id} style={{ borderBottom: isLast ? 'none' : '1px solid var(--border-color)', transition: 'background 0.1s' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(147,51,234,0.04)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                              >
+                                {isAdmin && (
+                                  <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      <MemberAvatar name={memberName} />
+                                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{memberName}</span>
+                                    </div>
+                                  </td>
+                                )}
+                                <td style={{ padding: '0.75rem 1rem', maxWidth: '260px' }}>
+                                  <span style={{ fontSize: '0.875rem', color: entry.description ? 'var(--text-primary)' : 'var(--text-muted)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {entry.description || <em>No description</em>}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '0.75rem 1rem' }}>
+                                  {entry.project ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: entry.project.color, flexShrink: 0 }} />
+                                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{entry.project.name}</span>
+                                    </div>
+                                  ) : (
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>—</span>
+                                  )}
+                                </td>
+                                <td style={{ padding: '0.75rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                  {startStr} – {endStr}
+                                </td>
+                                <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontFamily: 'monospace', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                                  {dur}
+                                </td>
+                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                  {entry.is_billable && <DollarSign size={13} color="var(--green)" />}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Week total footer */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0.75rem 1rem', borderTop: '2px solid var(--border-color)', marginTop: '-0.5rem' }}>
+                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginRight: '0.5rem' }}>Total for week:</span>
+                <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{secondsToHours(totalSecs)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
       ) : (
+        /* ── SUMMARY VIEW ── */
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '1.5rem' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            {/* Summary stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-              {[
-                { label: 'Total hours', value: secondsToHours(totalSecs) },
-                { label: 'Billable hours', value: `${secondsToHours(billableSecs)} (${billablePct}%)` },
-                { label: 'Avg daily hours', value: secondsToHours(Math.round(totalSecs / 7)) },
-              ].map(s => (
-                <div key={s.label} className="card" style={{ padding: '1rem' }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>{s.value}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
+            <StatCards />
 
             {/* Bar chart */}
             <div className="card" style={{ padding: '1.25rem' }}>
@@ -244,7 +382,7 @@ export default function ReportsClient({ orgId, isAdmin, currentUserId, projects,
 
             {/* Project breakdown table */}
             <div className="card" style={{ overflow: 'hidden' }}>
-              <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)' }}>
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>Project &amp; member breakdown</h3>
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -277,9 +415,59 @@ export default function ReportsClient({ orgId, isAdmin, currentUserId, projects,
                       <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>—</td>
                     </tr>
                   ))}
+                  {projectBreakdown.length === 0 && noProjectSecs === 0 && (
+                    <tr>
+                      <td colSpan={4} style={{ padding: '1.5rem 1rem', textAlign: 'center', fontSize: '0.875rem', color: 'var(--text-muted)' }}>No entries this week</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
+
+            {/* Member breakdown (admin only) */}
+            {isAdmin && members.length > 0 && (
+              <div className="card" style={{ overflow: 'hidden' }}>
+                <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)' }}>
+                  <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>Member breakdown</h3>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      {['Member', 'Total', 'Billable', 'Entries'].map(h => (
+                        <th key={h} style={{ padding: '0.625rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {members.map((m, idx) => {
+                      const me = entries.filter(e => e.user_id === m.user_id)
+                      const mSecs = me.reduce((s, e) => s + (e.duration || 0), 0)
+                      const mBill = me.filter(e => e.is_billable).reduce((s, e) => s + (e.duration || 0), 0)
+                      const isLast = idx === members.length - 1
+                      return (
+                        <tr key={m.user_id} style={{ borderBottom: isLast ? 'none' : '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <MemberAvatar name={m.full_name} />
+                              <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{m.full_name}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontWeight: 600, color: mSecs > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                            {mSecs > 0 ? secondsToHours(mSecs) : '—'}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                            {mBill > 0 ? secondsToHours(mBill) : '—'}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                            {me.length > 0 ? me.length : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Right: Pie */}
