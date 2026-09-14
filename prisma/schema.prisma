@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Organization {
+  id         String   @id @default(uuid())
+  name       String
+  timezone   String   @default("Europe/London")
+  created_at DateTime @default(now())
+
+  profiles     Profile[]
+  projects     Project[]
+  clients      Client[]
+  time_entries TimeEntry[]
+  invites      Invite[]
+  invoices     Invoice[]
+  tags         Tag[]
+
+  @@map("organizations")
+}
+
+model Profile {
+  id          String   @id @default(uuid())
+  user_id     String   @unique
+  full_name   String
+  avatar_url  String?
+  org_id      String
+  role        String   @default("member")
+  hourly_rate Float?
+  timezone    String   @default("Europe/London")
+  created_at  DateTime @default(now())
+
+  organization Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  time_entries TimeEntry[]
+
+  @@map("profiles")
+}
+
+model Client {
+  id         String   @id @default(uuid())
+  org_id     String
+  name       String
+  color      String   @default("#3b82f6")
+  created_at DateTime @default(now())
+
+  organization Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  projects     Project[]
+  invoices     Invoice[]
+
+  @@map("clients")
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  org_id      String
+  client_id   String?
+  name        String
+  color       String   @default("#8b5cf6")
+  is_billable Boolean  @default(true)
+  is_archived Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  organization Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  client       Client?      @relation(fields: [client_id], references: [id], onDelete: SetNull)
+  time_entries TimeEntry[]
+
+  @@map("projects")
+}
+
+model TimeEntry {
+  id          String    @id @default(uuid())
+  user_id     String
+  org_id      String
+  project_id  String?
+  description String    @default("")
+  start_time  DateTime
+  end_time    DateTime?
+  duration    Int?
+  is_billable Boolean   @default(true)
+  is_running  Boolean   @default(false)
+  created_at  DateTime  @default(now())
+
+  organization Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  profile      Profile      @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@map("time_entries")
+}
+
+model Tag {
+  id         String   @id @default(uuid())
+  org_id     String
+  name       String
+  color      String   @default("#6366f1")
+  created_at DateTime @default(now())
+
+  organization Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+
+  @@map("tags")
+}
+
+model Invite {
+  id         String   @id @default(uuid())
+  org_id     String
+  email      String
+  role       String   @default("member")
+  token      String   @unique @default(uuid())
+  expires_at DateTime
+  used       Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  organization Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+
+  @@map("invites")
+}
+
+model Invoice {
+  id             String   @id @default(uuid())
+  org_id         String
+  client_id      String
+  invoice_number String
+  status         String   @default("draft")
+  issue_date     DateTime
+  due_date       DateTime
+  total_amount   Float    @default(0)
+  currency       String   @default("GBP")
+  notes          String?
+  created_at     DateTime @default(now())
+
+  organization Organization  @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  client       Client        @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  items        InvoiceItem[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String @id @default(uuid())
+  invoice_id  String
+  description String
+  hours       Float
+  rate        Float
+  amount      Float
+
+  invoice Invoice @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
+}

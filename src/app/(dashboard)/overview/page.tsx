@@ -1,0 +1,86 @@
+﻿import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { redirect } from 'next/navigation'
+import OverviewClient from './OverviewClient'
+import { startOfWeek, endOfWeek, parseISO, format } from 'date-fns'
+
+export default async function OverviewPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const admin = createAdminClient()
+  const { data: profileData } = await admin.from('profiles')
+    .select('*, organization:organizations(*)')
+    .eq('user_id', user.id).single()
+  if (!profileData) redirect('/login')
+
+  const orgId = profileData.org_id
+  const now = new Date()
+  const weekStart = startOfWeek(now, { weekStartsOn: 1 })
+  const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
+
+  const [allMembersRes, weekEntriesRes, topProjectsRes] = await Promise.all([
+    admin.from('profiles').select('*').eq('org_id', orgId),
+    admin.from('time_entries').select('*, project:projects(*, client:clients(*))').eq('org_id', orgId).gte('start_time', weekStart.toISOString()).lte('start_time', weekEnd.toISOString()).eq('is_running', false),
+    admin.from('projects').select('*, client:clients(*)').eq('org_id', orgId).eq('is_archived', false).limit(10),
+  ])
+
+  const allMembers = (allMembersRes.data || []) as { user_id: string; full_name: string }[]
+  const weekEntries = (weekEntriesRes.data || []) as { user_id: string; start_time: string; is_billable: boolean; duration: number | null; project_id: string | null; project?: { name: string; color: string } | null }[]
+  const topProjects = topProjectsRes.data || []
+
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const weeklyData = days.map((day, i) => {
+    const date = new Date(weekStart)
+    date.setDate(weekStart.getDate() + i)
+    const dateStr = format(date, 'yyyy-MM-dd')
+    const dayEntries = weekEntries.filter(e => format(parseISO(e.start_time), 'yyyy-MM-dd') === dateStr)
+    const billable = dayEntries.filter(e => e.is_billable).reduce((s, e) => s + (e.duration || 0), 0)
+    const nonBillable = dayEntries.filter(e => !e.is_billable).reduce((s, e) => s + (e.duration || 0), 0)
+    return {
+      day: `${day} ${format(date, 'MM/dd')}`,
+      billable: Math.round(billable / 3600 * 100) / 100,
+      nonBillable: Math.round(nonBillable / 3600 * 100) / 100,
+      dateLabel: format(date, 'MM/dd'),
+    }
+  })
+
+  const projectHours: Record<string, { name: string; seconds: number; color: string }> = {}
+  weekEntries.forEach(e => {
+    const key = e.project_id || 'no-project'
+    const name = e.project?.name || 'Without project'
+    const color = e.project?.color || '#64748b'
+    if (!projectHours[key]) projectHours[key] = { name, seconds: 0, color }
+    projectHours[key].seconds += e.duration || 0
+  })
+  const projectDistribution = Object.values(projectHours)
+    .sort((a, b) => b.seconds - a.seconds)
+    .map(p => ({ name: p.name, hours: Math.round(p.seconds / 3600 * 100) / 100, color: p.color }))
+
+  const memberActivity = allMembers.map(m => {
+    const memberEntries = weekEntries.filter(e => e.user_id === m.user_id)
+    const total = memberEntries.reduce((s, e) => s + (e.duration || 0), 0)
+    return { id: m.user_id, name: m.full_name, hours: Math.round(total / 3600 * 100) / 100, is_tracking: false }
+  })
+
+  const totalSecs = weekEntries.reduce((s, e) => s + (e.duration || 0), 0)
+  const billableSecs = weekEntries.filter(e => e.is_billable).reduce((s, e) => s + (e.duration || 0), 0)
+  const org = profileData.organization as { name: string }
+
+  return (
+    <OverviewClient
+      orgName={org.name}
+      isAdmin={profileData.role === 'owner' || profileData.role === 'admin'}
+      stats={{
+        totalHours: Math.round(totalSecs / 3600 * 100) / 100,
+        billableHours: Math.round(billableSecs / 3600 * 100) / 100,
+        totalMembers: allMembers.length,
+        activeProjects: topProjects.length,
+        weeklyData,
+        projectDistribution,
+        memberActivity,
+      }}
+    />
+  )
+}

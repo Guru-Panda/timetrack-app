@@ -1,0 +1,234 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { Users, Clock, FolderOpen, TrendingUp, RefreshCw } from 'lucide-react'
+
+interface Props {
+  orgName: string
+  isAdmin: boolean
+  stats: {
+    totalHours: number
+    billableHours: number
+    totalMembers: number
+    activeProjects: number
+    weeklyData: { day: string; billable: number; nonBillable: number; dateLabel: string }[]
+    projectDistribution: { name: string; hours: number; color: string }[]
+    memberActivity: { id: string; name: string; hours: number; is_tracking: boolean }[]
+  }
+}
+
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; fill: string }>; label?: string }) => {
+  if (active && payload && payload.length) {
+    const total = payload.reduce((s, p) => s + p.value, 0)
+    return (
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.75rem' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.375rem' }}>{label}</p>
+        {payload.map((p, i) => (
+          <p key={i} style={{ fontSize: '0.875rem', color: p.fill, fontWeight: 500 }}>
+            {p.name}: {p.value.toFixed(2)}h
+          </p>
+        ))}
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>Total: {total.toFixed(2)}h</p>
+      </div>
+    )
+  }
+  return null
+}
+
+function StatCard({ icon: Icon, label, value, sub }: { icon: React.ElementType; label: string; value: string; sub?: string }) {
+  return (
+    <div className="card" style={{ padding: '1.25rem' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+        <div style={{ background: 'var(--purple-bg)', borderRadius: '8px', padding: '0.5rem', display: 'flex' }}>
+          <Icon size={18} color="var(--purple-pale)" />
+        </div>
+      </div>
+      <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.375rem' }}>{label}</div>
+      {sub && <div style={{ fontSize: '0.75rem', color: 'var(--purple-pale)', marginTop: '0.25rem' }}>{sub}</div>}
+    </div>
+  )
+}
+
+export default function OverviewClient({ orgName, isAdmin, stats }: Props) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  const billablePct = stats.totalHours > 0 ? Math.round((stats.billableHours / stats.totalHours) * 100) : 0
+
+  const formatHours = (h: number) => {
+    const hrs = Math.floor(h)
+    const mins = Math.round((h - hrs) * 60)
+    return mins > 0 ? `${hrs}:${String(mins).padStart(2, '0')}:00` : `${hrs}:00:00`
+  }
+
+  return (
+    <div style={{ padding: '1.5rem' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>Admin Overview</h1>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Set up your organisation and keep your team on track</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button className="btn-secondary" style={{ padding: '0.375rem 0.75rem', fontSize: '0.8rem' }}>
+            <RefreshCw size={13} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '1.5rem' }}>
+        {/* Left column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Stats row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
+            <StatCard icon={Clock} label="Total hours this week" value={formatHours(stats.totalHours)} />
+            <StatCard icon={TrendingUp} label="Billable hours" value={formatHours(stats.billableHours)} sub={`${billablePct}% billable`} />
+            <StatCard icon={Users} label="Team members" value={String(stats.totalMembers)} />
+            <StatCard icon={FolderOpen} label="Active projects" value={String(stats.activeProjects)} />
+          </div>
+
+          {/* Weekly bar chart */}
+          <div className="card" style={{ padding: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>This week summary</h2>
+              <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', color: 'var(--text-muted)' }}>
+                  <span style={{ width: 10, height: 10, background: '#9333ea', borderRadius: '2px' }} /> Billable
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', color: 'var(--text-muted)' }}>
+                  <span style={{ width: 10, height: 10, background: '#c084fc', borderRadius: '2px' }} /> Non-billable
+                </span>
+              </div>
+            </div>
+            {mounted ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={stats.weeklyData} barGap={2}>
+                  <XAxis dataKey="dateLabel" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={v => `${v}h`} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(147,51,234,0.06)' }} />
+                  <Bar dataKey="billable" name="Billable" stackId="a" fill="#9333ea" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="nonBillable" name="Non-billable" stackId="a" fill="#c084fc" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>Loading chart…</div>
+            )}
+          </div>
+
+          {/* Team activity */}
+          {isAdmin && (
+            <div className="card" style={{ padding: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>Team activity</h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--purple-pale)', cursor: 'pointer' }}>View team activity →</span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                {/* Circle */}
+                <div style={{ position: 'relative', width: 100, height: 100, flexShrink: 0 }}>
+                  <svg viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
+                    <circle cx="50" cy="50" r="38" fill="none" stroke="var(--border-color)" strokeWidth="10" />
+                    <circle cx="50" cy="50" r="38" fill="none" stroke="var(--purple)" strokeWidth="10"
+                      strokeDasharray={`${2 * Math.PI * 38}`}
+                      strokeDashoffset={`${2 * Math.PI * 38 * (1 - (stats.memberActivity.filter(m => m.hours > 0).length / Math.max(stats.memberActivity.length, 1)))}`}
+                      strokeLinecap="round" />
+                  </svg>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {stats.memberActivity.filter(m => m.hours > 0).length}/{stats.memberActivity.length}
+                    </span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>tracking</span>
+                  </div>
+                </div>
+
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {stats.memberActivity.map(m => (
+                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--purple)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: 'white', flexShrink: 0 }}>
+                        {(m.name || '?').split(' ').map((n: string) => n[0] || '').join('').toUpperCase().slice(0, 2) || '?'}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>{m.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          {m.hours > 0 ? `${formatHours(m.hours)} this week` : 'No time this week'}
+                        </div>
+                      </div>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: m.is_tracking ? 'var(--green)' : 'var(--text-muted)' }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Top projects */}
+          <div className="card" style={{ padding: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>Top projects this week</h2>
+            </div>
+            {stats.projectDistribution.length === 0 ? (
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1rem 0' }}>No data yet</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+                {stats.projectDistribution.slice(0, 6).map((p, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                    </div>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                      {formatHours(p.hours)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Pie chart */}
+          {stats.projectDistribution.length > 0 && (
+            <div className="card" style={{ padding: '1.25rem' }}>
+              <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '1rem' }}>Project distribution</h2>
+              {mounted ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={stats.projectDistribution} dataKey="hours" innerRadius={55} outerRadius={80} paddingAngle={2}>
+                      {stats.projectDistribution.map((entry, index) => (
+                        <Cell key={index} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${Number(value).toFixed(2)}h`, 'Hours']} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : null}
+            </div>
+          )}
+
+          {/* Time tracked % */}
+          <div className="card" style={{ padding: '1.25rem' }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '1rem' }}>Time tracked to projects</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ position: 'relative', width: 100, height: 100 }}>
+                <svg viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
+                  <circle cx="50" cy="50" r="38" fill="none" stroke="var(--border-color)" strokeWidth="12" />
+                  <circle cx="50" cy="50" r="38" fill="none" stroke="#eab308" strokeWidth="12"
+                    strokeDasharray={`${2 * Math.PI * 38}`}
+                    strokeDashoffset={`${2 * Math.PI * 38 * (1 - billablePct / 100)}`}
+                    strokeLinecap="round" />
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{billablePct}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
