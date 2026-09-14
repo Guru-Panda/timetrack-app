@@ -16,13 +16,23 @@ export default async function OverviewPage() {
   if (!profileData) redirect('/login')
 
   const orgId = profileData.org_id
+  const isAdmin = profileData.role === 'owner' || profileData.role === 'admin'
   const now = new Date()
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
 
+  // Non-admins only see their own entries — admins see the whole org
+  let entriesQuery = admin.from('time_entries')
+    .select('*, project:projects(*, client:clients(*))')
+    .eq('org_id', orgId)
+    .gte('start_time', weekStart.toISOString())
+    .lte('start_time', weekEnd.toISOString())
+    .eq('is_running', false)
+  if (!isAdmin) entriesQuery = entriesQuery.eq('user_id', user.id)
+
   const [allMembersRes, weekEntriesRes, topProjectsRes] = await Promise.all([
     admin.from('profiles').select('*').eq('org_id', orgId),
-    admin.from('time_entries').select('*, project:projects(*, client:clients(*))').eq('org_id', orgId).gte('start_time', weekStart.toISOString()).lte('start_time', weekEnd.toISOString()).eq('is_running', false),
+    entriesQuery,
     admin.from('projects').select('*, client:clients(*)').eq('org_id', orgId).eq('is_archived', false).limit(10),
   ])
 
@@ -71,7 +81,7 @@ export default async function OverviewPage() {
   return (
     <OverviewClient
       orgName={org.name}
-      isAdmin={profileData.role === 'owner' || profileData.role === 'admin'}
+      isAdmin={isAdmin}
       stats={{
         totalHours: Math.round(totalSecs / 3600 * 100) / 100,
         billableHours: Math.round(billableSecs / 3600 * 100) / 100,
