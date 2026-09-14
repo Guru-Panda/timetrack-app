@@ -30,15 +30,17 @@ export default async function OverviewPage() {
     .eq('is_running', false)
   if (!isAdmin) entriesQuery = entriesQuery.eq('user_id', user.id)
 
-  const [allMembersRes, weekEntriesRes, topProjectsRes] = await Promise.all([
+  const [allMembersRes, weekEntriesRes, topProjectsRes, runningRes] = await Promise.all([
     admin.from('profiles').select('*').eq('org_id', orgId),
     entriesQuery,
     admin.from('projects').select('*, client:clients(*)').eq('org_id', orgId).eq('is_archived', false).limit(10),
+    admin.from('time_entries').select('user_id').eq('org_id', orgId).eq('is_running', true),
   ])
 
   const allMembers = (allMembersRes.data || []) as { user_id: string; full_name: string }[]
   const weekEntries = (weekEntriesRes.data || []) as { user_id: string; start_time: string; is_billable: boolean; duration: number | null; project_id: string | null; project?: { name: string; color: string } | null }[]
   const topProjects = topProjectsRes.data || []
+  const trackingUserIds = new Set((runningRes.data || []).map((e: { user_id: string }) => e.user_id))
 
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const weeklyData = days.map((day, i) => {
@@ -71,7 +73,7 @@ export default async function OverviewPage() {
   const memberActivity = allMembers.map(m => {
     const memberEntries = weekEntries.filter(e => e.user_id === m.user_id)
     const total = memberEntries.reduce((s, e) => s + (e.duration || 0), 0)
-    return { id: m.user_id, name: m.full_name, hours: Math.round(total / 3600 * 100) / 100, is_tracking: false }
+    return { id: m.user_id, name: m.full_name, hours: Math.round(total / 3600 * 100) / 100, is_tracking: trackingUserIds.has(m.user_id) }
   })
 
   const totalSecs = weekEntries.reduce((s, e) => s + (e.duration || 0), 0)

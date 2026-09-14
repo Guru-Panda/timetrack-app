@@ -16,12 +16,12 @@ export async function POST(req: Request) {
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (profile.role === 'member') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { name, client_id, color, is_billable, org_id } = await req.json()
+  const { name, client_id, color, is_billable } = await req.json()
   if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
 
   const admin = createAdminClient()
   const { data: project, error } = await admin.from('projects').insert({
-    name, client_id: client_id || null, color: color || '#8b5cf6', is_billable: is_billable ?? true, org_id,
+    name, client_id: client_id || null, color: color || '#8b5cf6', is_billable: is_billable ?? true, org_id: profile.org_id,
   }).select('*, client:clients(*)').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(project)

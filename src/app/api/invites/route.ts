@@ -34,6 +34,7 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Send invite email via Gmail SMTP
+  let emailSent = false
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
     try {
       const transporter = nodemailer.createTransport({
@@ -70,10 +71,15 @@ export async function POST(req: Request) {
           </div>
         `,
       })
+      emailSent = true
     } catch (emailErr) {
       console.error('Email send failed:', emailErr)
+      return NextResponse.json(
+        { error: 'Invite created but email failed to send. Check your SMTP settings.' },
+        { status: 500 }
+      )
     }
   }
 
-  return NextResponse.json(invite)
+  return NextResponse.json({ ...invite, email_sent: emailSent })
 }

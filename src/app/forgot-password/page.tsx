@@ -132,6 +132,8 @@ export default function ForgotPasswordPage() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [resendCooldown, setResendCooldown] = useState(0)
+  const [otpToken, setOtpToken] = useState('')        // signed token from sendOtp
+  const [verifiedToken, setVerifiedToken] = useState('') // signed token from verifyOtp
 
   // Resend cooldown timer
   useEffect(() => {
@@ -152,6 +154,7 @@ export default function ForgotPasswordPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      setOtpToken(data.otpToken || '')
       toast.success('OTP sent! Check your inbox.')
       setOtp('')
       setStep('otp')
@@ -174,6 +177,7 @@ export default function ForgotPasswordPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      setOtpToken(data.otpToken || '')
       toast.success('New OTP sent!')
       setOtp('')
       setResendCooldown(60)
@@ -196,10 +200,11 @@ export default function ForgotPasswordPage() {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, token: otp.replace(/\s/g, '') }),
+        body: JSON.stringify({ email, token: otp.replace(/\s/g, ''), otpToken }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      setVerifiedToken(data.verifiedToken || '')
       toast.success('Identity verified!')
       setStep('password')
     } catch (err: unknown) {
@@ -219,7 +224,7 @@ export default function ForgotPasswordPage() {
       const res = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ verifiedToken, password }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)

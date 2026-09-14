@@ -7,8 +7,12 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { description, project_id, is_billable, org_id } = await req.json()
+  const { description, project_id, is_billable } = await req.json()
   const admin = createAdminClient()
+
+  const { data: profile } = await admin.from('profiles').select('org_id').eq('user_id', user.id).single()
+  if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const now = new Date()
 
   // Stop any currently running timer
@@ -24,7 +28,7 @@ export async function POST(req: Request) {
 
   const { data: entry, error } = await admin.from('time_entries').insert({
     user_id: user.id,
-    org_id,
+    org_id: profile.org_id,
     project_id: project_id || null,
     description: description || '',
     start_time: now.toISOString(),

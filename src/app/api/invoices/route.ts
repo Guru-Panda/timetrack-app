@@ -15,7 +15,8 @@ export async function POST(req: Request) {
   const profile = await getProfile()
   if (!profile || profile.role === 'member') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { org_id, client_id, issue_date, due_date, currency, notes, items, total_amount } = await req.json()
+  const { client_id, issue_date, due_date, currency, notes, items, total_amount } = await req.json()
+  const org_id = profile.org_id
 
   const admin = createAdminClient()
   const { count } = await admin.from('invoices').select('*', { count: 'exact', head: true }).eq('org_id', org_id)

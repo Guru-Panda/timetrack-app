@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Users, Clock, FolderOpen, TrendingUp, RefreshCw, ChevronDown } from 'lucide-react'
 import {
@@ -100,7 +101,7 @@ function computeStats(entries: RawEntry[], baseMembers: Props['stats']['memberAc
     .map(p => ({ name: p.name, hours: Math.round(p.seconds / 3600 * 100) / 100, color: p.color }))
   const memberActivity = baseMembers.map(m => {
     const secs = entries.filter(e => e.user_id === m.id).reduce((s, e) => s + (e.duration || 0), 0)
-    return { ...m, hours: Math.round(secs / 3600 * 100) / 100, is_tracking: false }
+    return { ...m, hours: Math.round(secs / 3600 * 100) / 100 }
   })
   return {
     totalHours: Math.round(totalSecs / 3600 * 100) / 100,
@@ -144,6 +145,7 @@ function StatCard({ icon: Icon, label, value, sub }: { icon: React.ElementType; 
 }
 
 export default function OverviewClient({ orgName, isAdmin, stats }: Props) {
+  const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [period, setPeriod] = useState<Period>('this_week')
   const [showPeriodMenu, setShowPeriodMenu] = useState(false)
@@ -155,10 +157,6 @@ export default function OverviewClient({ orgName, isAdmin, stats }: Props) {
   useEffect(() => setMounted(true), [])
 
   const loadPeriod = useCallback(async (p: Period) => {
-    if (p === 'this_week') {
-      setDynamicStats(null)
-      return
-    }
     setFetching(true)
     try {
       const { start, end, type } = getPeriodRange(p)
@@ -179,6 +177,10 @@ export default function OverviewClient({ orgName, isAdmin, stats }: Props) {
   const handlePeriodSelect = (p: Period) => {
     setPeriod(p)
     setShowPeriodMenu(false)
+    if (p === 'this_week') {
+      setDynamicStats(null) // revert to server-rendered initial data
+      return
+    }
     loadPeriod(p)
   }
 
@@ -284,7 +286,7 @@ export default function OverviewClient({ orgName, isAdmin, stats }: Props) {
             <div className="card" style={{ padding: '1.25rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
                 <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>Team activity</h2>
-                <span style={{ fontSize: '0.8rem', color: 'var(--purple-pale)', cursor: 'pointer' }}>View team activity →</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--purple-pale)', cursor: 'pointer' }} onClick={() => router.push('/reports')}>View team activity →</span>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
@@ -372,7 +374,7 @@ export default function OverviewClient({ orgName, isAdmin, stats }: Props) {
 
           {/* Time tracked % */}
           <div className="card" style={{ padding: '1.25rem' }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '1rem' }}>Time tracked to projects</h2>
+            <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '1rem' }}>Billable time</h2>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ position: 'relative', width: 100, height: 100 }}>
                 <svg viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>

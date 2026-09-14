@@ -15,11 +15,11 @@ export async function POST(req: Request) {
   const profile = await getProfile()
   if (!profile || profile.role === 'member') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { name, color, org_id } = await req.json()
+  const { name, color } = await req.json()
   if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
 
   const admin = createAdminClient()
-  const { data: client, error } = await admin.from('clients').insert({ name, color: color || '#3b82f6', org_id }).select().single()
+  const { data: client, error } = await admin.from('clients').insert({ name, color: color || '#3b82f6', org_id: profile.org_id }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(client)
 }
