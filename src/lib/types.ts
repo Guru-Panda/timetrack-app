@@ -99,6 +99,98 @@ export interface InvoiceItem {
   amount: number
 }
 
+export type LeaveType = 'annual' | 'sick' | 'casual' | 'unpaid' | 'maternity' | 'paternity' | 'wfh' | 'other'
+export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+export type HalfDayPeriod = 'morning' | 'afternoon'
+export type ActionStatus = 'unstarted' | 'in_progress' | 'blocked' | 'completed'
+
+export interface LeavePolicy {
+  id: string
+  org_id: string
+  name: string
+  leave_type: LeaveType
+  annual_quota: number
+  allow_half_day: boolean
+  carry_forward: boolean
+  color: string
+  created_at: string
+}
+
+export interface LeaveBalance {
+  id: string
+  org_id: string
+  user_id: string
+  policy_id: string
+  year: number
+  used: number
+  allocated: number
+  policy?: LeavePolicy
+}
+
+export interface LeaveRequest {
+  id: string
+  org_id: string
+  user_id: string
+  policy_id: string
+  start_date: string
+  end_date: string
+  is_half_day: boolean
+  half_day_period: HalfDayPeriod | null
+  days_count: number
+  reason: string
+  status: LeaveStatus
+  reviewer_id: string | null
+  reviewed_at: string | null
+  review_note: string | null
+  hive_action_id: string | null
+  created_at: string
+  policy?: LeavePolicy
+  profile?: Profile
+  reviewer?: Profile
+}
+
+export interface Integration {
+  id: string
+  org_id: string
+  provider: 'hive' | string
+  api_key: string | null
+  external_id: string | null
+  workspace_id: string | null
+  config: Record<string, unknown> | null
+  enabled: boolean
+  last_sync_at: string | null
+  created_at: string
+}
+
+export interface Action {
+  id: string
+  org_id: string
+  project_id: string | null
+  assignee_id: string | null
+  title: string
+  description: string
+  status: ActionStatus
+  due_date: string | null
+  hive_action_id: string | null
+  position: number
+  created_at: string
+  updated_at: string
+  project?: Project
+  assignee?: Profile
+}
+
+export interface LeaveAnalytics {
+  totalRequests: number
+  approved: number
+  pending: number
+  rejected: number
+  totalDaysTaken: number
+  halfDayCount: number
+  byType: { type: string; days: number; color: string }[]
+  byMonth: { month: string; days: number; halfDays: number }[]
+  byMember: { name: string; days: number; halfDays: number }[]
+}
+
 export interface DashboardStats {
   totalHours: number
   billableHours: number

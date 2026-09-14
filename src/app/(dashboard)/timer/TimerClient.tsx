@@ -14,9 +14,10 @@ interface Props {
   projects: Project[]
   initialRunning: TimeEntry | null
   initialEntries: TimeEntry[]
+  isAdmin: boolean
 }
 
-export default function TimerClient({ userId, orgId, projects, initialRunning, initialEntries }: Props) {
+export default function TimerClient({ userId, orgId, projects, initialRunning, initialEntries, isAdmin }: Props) {
   const [description, setDescription] = useState(initialRunning?.description || '')
   const [selectedProject, setSelectedProject] = useState<string>(initialRunning?.project_id || '')
   const [isBillable, setIsBillable] = useState(initialRunning?.is_billable ?? true)
@@ -287,6 +288,7 @@ export default function TimerClient({ userId, orgId, projects, initialRunning, i
       {showManualEntry && (
         <ManualEntryPanel
           projects={projects}
+          isAdmin={isAdmin}
           onClose={() => setShowManualEntry(false)}
           onSave={(entry) => {
             setEntries(prev => [entry, ...prev].sort((a, b) =>
@@ -314,7 +316,7 @@ export default function TimerClient({ userId, orgId, projects, initialRunning, i
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
             {dayEntries.map(entry => (
-              <EntryRow key={entry.id} entry={entry} onDelete={deleteEntry} onContinue={continueEntry} onUpdate={updateEntry} />
+              <EntryRow key={entry.id} entry={entry} onDelete={deleteEntry} onContinue={continueEntry} onUpdate={updateEntry} isAdmin={isAdmin} />
             ))}
           </div>
         </div>
@@ -325,13 +327,15 @@ export default function TimerClient({ userId, orgId, projects, initialRunning, i
 
 // ─── Manual Entry Panel ──────────────────────────────────────────────────────
 
-function ManualEntryPanel({ projects, onClose, onSave }: {
+function ManualEntryPanel({ projects, isAdmin, onClose, onSave }: {
   projects: Project[]
+  isAdmin: boolean
   onClose: () => void
   onSave: (entry: TimeEntry) => void
 }) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const nowTime = format(new Date(), 'HH:mm')
+  const minDate = format(new Date(Date.now() - 36 * 3600 * 1000), 'yyyy-MM-dd')
 
   const [desc, setDesc] = useState('')
   const [projectId, setProjectId] = useState('')
@@ -350,9 +354,13 @@ function ManualEntryPanel({ projects, onClose, onSave }: {
       toast.error('Duration must be greater than 0')
       return
     }
+    const startMs = new Date(`${date}T${startTime}`).getTime()
+    if (!isAdmin && startMs < Date.now() - 36 * 3600 * 1000) {
+      toast.error('You can only log time within the last 36 hours')
+      return
+    }
     setSaving(true)
     try {
-      const startMs = new Date(`${date}T${startTime}`).getTime()
       const durationSecs = hours * 3600 + minutes * 60
       const endMs = startMs + durationSecs * 1000
       const res = await fetch('/api/time-entries', {
@@ -447,6 +455,8 @@ function ManualEntryPanel({ projects, onClose, onSave }: {
             type="date"
             className="input"
             value={date}
+            min={isAdmin ? undefined : minDate}
+            max={today}
             onChange={e => setDate(e.target.value)}
             style={{ width: '100%' }}
           />
@@ -518,12 +528,14 @@ function FolderIcon({ size }: { size: number }) {
 
 // ─── Entry Row ────────────────────────────────────────────────────────────────
 
-function EntryRow({ entry, onDelete, onContinue, onUpdate }: {
+function EntryRow({ entry, onDelete, onContinue, onUpdate, isAdmin }: {
   entry: TimeEntry
   onDelete: (id: string) => void
   onContinue: (e: TimeEntry) => void
   onUpdate: (id: string, description: string) => void
+  isAdmin: boolean
 }) {
+  const canEdit = isAdmin || new Date(entry.start_time).getTime() > Date.now() - 36 * 3600 * 1000
   const [hover, setHover] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editDesc, setEditDesc] = useState(entry.description)
@@ -597,13 +609,15 @@ function EntryRow({ entry, onDelete, onContinue, onUpdate }: {
       </div>
       {hover && !editing && (
         <div style={{ display: 'flex', gap: '0.25rem' }}>
-          <button
-            onClick={startEdit}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', borderRadius: '4px', display: 'flex' }}
-            title="Edit description"
-          >
-            <Pencil size={14} />
-          </button>
+          {canEdit && (
+            <button
+              onClick={startEdit}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', borderRadius: '4px', display: 'flex' }}
+              title="Edit description"
+            >
+              <Pencil size={14} />
+            </button>
+          )}
           <button
             onClick={() => onContinue(entry)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', borderRadius: '4px', display: 'flex' }}

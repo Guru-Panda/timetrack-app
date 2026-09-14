@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import {
   Clock, LayoutDashboard, Timer, FolderOpen, Users, Users2,
   DollarSign, FileText, Tag, Target, Zap, Settings,
-  LogOut, ChevronDown, Building2
+  LogOut, ChevronDown, Building2, CalendarDays, CheckSquare, PieChart, KanbanSquare
 } from 'lucide-react'
 import { useState } from 'react'
 import type { Profile, Organization } from '@/lib/types'
@@ -35,11 +35,17 @@ export default function Sidebar({ profile, org }: Props) {
   const trackLinks = [
     { href: '/overview', icon: LayoutDashboard, label: 'Overview' },
     { href: '/timer', icon: Timer, label: 'Timer' },
+    { href: '/status', icon: KanbanSquare, label: 'Status board' },
+  ]
+
+  const hrLinks = [
+    { href: '/leaves', icon: CalendarDays, label: 'Leaves' },
+    ...(isAdmin ? [{ href: '/approvals', icon: CheckSquare, label: 'Approvals' }] : []),
+    ...(isAdmin ? [{ href: '/leaves/analytics', icon: PieChart, label: 'Leave analytics' }] : []),
   ]
 
   const analyzeLinks = [
     { href: '/reports', icon: FileText, label: 'Reports' },
-    { href: '/approvals', icon: Target, label: 'Approvals' },
   ]
 
   const manageLinks = [
@@ -85,7 +91,7 @@ export default function Sidebar({ profile, org }: Props) {
 
   return (
     <aside style={{
-      width: '220px', minWidth: '220px', height: '100vh', position: 'fixed', top: 0, left: 0,
+      width: '220px', minWidth: '220px', height: 'calc(100vh - 32px)', position: 'fixed', top: '32px', left: 0,
       background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-color)',
       display: 'flex', flexDirection: 'column', zIndex: 40, overflow: 'hidden'
     }}>
@@ -160,6 +166,9 @@ export default function Sidebar({ profile, org }: Props) {
       <nav style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
         <SectionLabel label="Track" />
         {trackLinks.map(l => <NavLink key={l.href} {...l} />)}
+
+        <SectionLabel label="HR" />
+        {hrLinks.map(l => <NavLink key={l.href} {...l} />)}
 
         <SectionLabel label="Analyze" />
         {analyzeLinks.map(l => <NavLink key={l.href} {...l} />)}

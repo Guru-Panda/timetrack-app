@@ -25,6 +25,7 @@ export default async function TimerPage() {
       projects={projectsRes.data || []}
       initialRunning={runningRes.data || null}
       initialEntries={recentRes.data || []}
+      isAdmin={profile.role !== 'member'}
     />
   )
 }

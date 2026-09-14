@@ -19,6 +19,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const admin = createAdminClient()
+  const { data: profile } = await admin.from('profiles').select('role').eq('user_id', user.id).single()
+  const isAdmin = profile?.role !== 'member'
+
+  if (!isAdmin) {
+    const { data: existing } = await admin.from('time_entries').select('start_time').eq('id', id).eq('user_id', user.id).single()
+    if (existing) {
+      const cutoff = new Date(Date.now() - 36 * 60 * 60 * 1000)
+      if (new Date(existing.start_time) < cutoff) {
+        return NextResponse.json({ error: 'Entries older than 36 hours cannot be edited.' }, { status: 403 })
+      }
+    }
+  }
+
   const body = await req.json()
 
   // Whitelist only safe, user-editable fields
@@ -34,7 +48,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
   }
 
-  const admin = createAdminClient()
   const { data: entry, error } = await admin.from('time_entries')
     .update(allowed).eq('id', id).eq('user_id', user.id)
     .select('*, project:projects(*, client:clients(*))').single()

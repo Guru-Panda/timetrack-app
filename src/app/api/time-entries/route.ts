@@ -64,6 +64,14 @@ export async function POST(req: Request) {
   const { description, project_id, is_billable, start_time, end_time, duration } = await req.json()
   if (!start_time) return NextResponse.json({ error: 'start_time is required' }, { status: 400 })
 
+  const isAdmin = profile.role !== 'member'
+  if (!isAdmin) {
+    const cutoff = new Date(Date.now() - 36 * 60 * 60 * 1000)
+    if (new Date(start_time) < cutoff) {
+      return NextResponse.json({ error: 'You can only log time within the last 36 hours.' }, { status: 400 })
+    }
+  }
+
   const { data, error } = await admin.from('time_entries').insert({
     user_id: user.id,
     org_id: profile.org_id,

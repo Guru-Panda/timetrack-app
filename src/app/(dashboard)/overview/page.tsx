@@ -84,6 +84,7 @@ export default async function OverviewPage() {
     <OverviewClient
       orgName={org.name}
       isAdmin={isAdmin}
+      members={allMembers.map(m => ({ id: m.user_id, name: m.full_name }))}
       stats={{
         totalHours: Math.round(totalSecs / 3600 * 100) / 100,
         billableHours: Math.round(billableSecs / 3600 * 100) / 100,
