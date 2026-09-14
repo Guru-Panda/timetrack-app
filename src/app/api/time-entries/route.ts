@@ -51,3 +51,31 @@ export async function GET(req: Request) {
 
   return NextResponse.json({ entries: enriched })
 }
+
+export async function POST(req: Request) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const admin = createAdminClient()
+  const { data: profile } = await admin.from('profiles').select('*').eq('user_id', user.id).single()
+  if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { description, project_id, is_billable, start_time, end_time, duration } = await req.json()
+  if (!start_time) return NextResponse.json({ error: 'start_time is required' }, { status: 400 })
+
+  const { data, error } = await admin.from('time_entries').insert({
+    user_id: user.id,
+    org_id: profile.org_id,
+    description: description || '',
+    project_id: project_id || null,
+    is_billable: is_billable ?? true,
+    start_time,
+    end_time: end_time || null,
+    duration: duration || null,
+    is_running: false,
+  }).select('*, project:projects(*, client:clients(*))').single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data, { status: 201 })
+}
