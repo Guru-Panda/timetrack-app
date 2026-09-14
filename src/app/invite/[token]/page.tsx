@@ -3,8 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Clock, CheckCircle } from 'lucide-react'
 
@@ -15,18 +14,18 @@ export default function InvitePage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
-  const router = useRouter()
-  const supabase = createClient()
+  const [inviteError, setInviteError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/invites/${token}`)
       .then(r => r.json())
       .then(data => {
-        if (data.error) { toast.error(data.error); router.push('/login') }
+        if (data.error) setInviteError(data.error)
         else setInvite(data)
       })
+      .catch(() => setInviteError('Could not load invite. Please try again.'))
       .finally(() => setChecking(false))
-  }, [token, router])
+  }, [token])
 
   async function handleAccept(e: React.FormEvent) {
     e.preventDefault()
@@ -40,12 +39,19 @@ export default function InvitePage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
 
-      const { error } = await supabase.auth.signInWithPassword({ email: invite!.email, password })
-      if (error) throw error
+      // Sign in server-side so session cookies are set correctly
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: invite!.email, password }),
+      })
+      if (!loginRes.ok) {
+        const loginData = await loginRes.json().catch(() => ({}))
+        throw new Error(loginData.error ?? 'Login failed')
+      }
 
       toast.success('Welcome to the team!')
-      router.push('/overview')
-      router.refresh()
+      window.location.href = '/overview'
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to accept invite')
       setLoading(false)
@@ -55,6 +61,16 @@ export default function InvitePage() {
   if (checking) return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <span className="animate-spin" style={{ width: 32, height: 32, border: '3px solid var(--purple)', borderTop: '3px solid transparent', borderRadius: '50%', display: 'inline-block' }} />
+    </div>
+  )
+
+  if (inviteError) return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div className="card" style={{ padding: '2rem', maxWidth: 400, width: '100%', textAlign: 'center' }}>
+        <p style={{ color: 'var(--red)', fontWeight: 600, marginBottom: '0.5rem' }}>Invite not found or expired</p>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>{inviteError}</p>
+        <a href="/login" style={{ color: 'var(--purple-pale)', fontSize: '0.875rem' }}>Go to login →</a>
+      </div>
     </div>
   )
 
