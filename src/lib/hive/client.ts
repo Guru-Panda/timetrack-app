@@ -1,7 +1,7 @@
 // Minimal wrapper around the Hive.com public API (v3).
 // Docs: https://developers.hive.com/reference — needs `api_key` + `user_id` on every call.
 
-const HIVE_BASE = 'https://app.hive.com/api/v3'
+const HIVE_BASE = 'https://app.hive.com/api/v1'
 
 export interface HiveCredentials {
   apiKey: string
