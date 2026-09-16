@@ -48,14 +48,12 @@ async function hiveFetch<T>(
 }
 
 export async function hivePing(creds: HiveCredentials) {
-  return hiveFetch<{ id: string; email?: string; full_name?: string }>(
-    `/users/${creds.userId}`,
-    creds
-  )
+  const ws = await hiveListWorkspaces(creds)
+  return { id: creds.userId, workspaces: ws.length }
 }
 
 export async function hiveListWorkspaces(creds: HiveCredentials) {
-  return hiveFetch<HiveWorkspace[]>(`/users/${creds.userId}/workspaces`, creds)
+  return hiveFetch<HiveWorkspace[]>(`/workspaces`, creds)
 }
 
 export async function hiveListProjects(creds: HiveCredentials, workspaceId: string) {

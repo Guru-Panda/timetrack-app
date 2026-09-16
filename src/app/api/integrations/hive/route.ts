@@ -20,8 +20,8 @@ export async function POST(req: Request) {
   if (!api_key || !external_id) return NextResponse.json({ error: 'api_key and external_id required' }, { status: 400 })
 
   try {
-    const me = await hivePing({ apiKey: api_key, userId: external_id })
     const workspaces = await hiveListWorkspaces({ apiKey: api_key, userId: external_id })
+    const me = { id: external_id, workspaces: workspaces.length }
     const chosen = workspace_id || workspaces[0]?.id || null
 
     const { data, error } = await admin.from('integrations').upsert({
